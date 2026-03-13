@@ -1,0 +1,24 @@
+Guida avvio AI Revenue Engine
+
+1. Aprire il terminale
+cd ~/ai-revenue-demo
+
+2. Attivare ambiente virtuale
+source venv/bin/activate
+
+3. Avviare la piattaforma
+streamlit run app.py
+
+4. Aprire il browser
+http://localhost:8501
+
+5. Caricare il file
+hotel_data.csv
+
+La dashboard mostrerà:
+- Occupancy
+- ADR
+- RevPAR
+- Forecast domanda
+- Simulatore ricavi
+
