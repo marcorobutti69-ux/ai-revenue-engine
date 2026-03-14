@@ -34,21 +34,23 @@ if uploaded_file:
 
     st.line_chart(data["occupancy"])
 
-    data["day"] = np.arange(len(data))
+# AI forecast
 
-    X = data[["day"]]
-    y = data["rooms_sold"]
+data["day"] = np.arange(len(data))
 
-    model = LinearRegression()
-    model.fit(X,y)
+X = data[["day"]]
+y = data["rooms_sold"]
 
-    future_days = np.arange(len(data), len(data)+365).reshape(-1,1)
+model = LinearRegression()
+model.fit(X, y)
 
-    forecast = model.predict(future_days)
+future_days = np.arange(len(data), len(data)+30).reshape(-1,1)
 
-    st.header("Forecast domanda 30 giorni")
+forecast = model.predict(future_days)
 
-    st.line_chart(forecast)
+st.subheader("Forecast occupazione 30 giorni")
+
+st.line_chart(forecast)
 
 predicted_demand = forecast.mean()
 
