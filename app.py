@@ -134,6 +134,35 @@ if uploaded_file:
     col7.metric("RevPAR simulato", f"{simulated_revpar:.0f}€")
     col8.metric("Revenue stimato", f"{simulated_revenue:.0f}€")
 
+st.subheader("AI Revenue Assistant")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+user_input = st.chat_input("Fai una domanda sul revenue dell'hotel")
+
+if user_input:
+
+    st.session_state.messages.append({"role": "user", "content": user_input})
+
+    if "prezzo" in user_input.lower():
+        response = f"Il prezzo suggerito è circa {suggested_price:.0f}€"
+
+    elif "domanda" in user_input.lower():
+        response = f"La domanda prevista media è {predicted_demand:.0f} camere"
+
+    elif "revenue" in user_input.lower():
+        response = f"Il revenue stimato annuale è {total_revenue_365:,.0f}€"
+
+    else:
+        response = "Posso aiutarti con forecast domanda, prezzo suggerito o revenue previsto."
+
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+
 st.subheader("AI Revenue Manager")
 
 if "chat_history" not in st.session_state:
@@ -208,6 +237,50 @@ Posso aiutarti con:
     st.session_state.chat_history.append(("ai", answer))
 
 for role, text in st.session_state.chat_history:
+
+    with st.chat_message("user" if role == "user" else "assistant"):
+        st.write(text)
+
+st.subheader("AI Revenue Copilot")
+
+if "copilot_history" not in st.session_state:
+    st.session_state.copilot_history = []
+
+question = st.chat_input("Chiedi all'AI Revenue Copilot")
+
+if question:
+
+    st.session_state.copilot_history.append(("user", question))
+
+    # analisi AI semplice
+
+    weekend_demand = data["rooms_sold"].tail(7).mean()
+
+    if predicted_demand > weekend_demand:
+        strategy = "aumentare i prezzi nei giorni di alta domanda"
+    else:
+        strategy = "mantenere prezzi competitivi"
+
+    answer = f"""
+Analisi AI completata.
+
+Domanda prevista media: {predicted_demand:.0f} camere
+Prezzo suggerito: {suggested_price:.0f} €
+ADR attuale: {adr:.0f} €
+
+Revenue stimato 365 giorni:
+{total_revenue_365:,.0f} €
+
+Strategia consigliata:
+{strategy}
+
+Suggerimento AI:
+monitorare i giorni con occupazione alta e aumentare gradualmente il prezzo.
+"""
+
+    st.session_state.copilot_history.append(("ai", answer))
+
+for role, text in st.session_state.copilot_history:
 
     with st.chat_message("user" if role == "user" else "assistant"):
         st.write(text)
