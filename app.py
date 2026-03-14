@@ -16,17 +16,15 @@ if uploaded_file:
 
     data["occupancy"] = data["rooms_sold"] / data["rooms_available"]
 
+    col1, col2, col3 = st.columns(3)
+
     avg_occ = data["occupancy"].mean()*100
     adr = data["ADR"].mean()
     revpar = adr * (avg_occ/100)
 
-    st.header("KPI Hotel")
-
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric("Occupancy", f"{avg_occ:.1f}%")
-    col2.metric("ADR", f"{adr:.0f}€")
-    col3.metric("RevPAR", f"{revpar:.0f}€")
+    col1.metric("Occupazione media", f"{avg_occ:.1f}%")
+    col2.metric("ADR medio", f"{adr:.0f}€")
+    col3.metric("RevPAR medio", f"{revpar:.0f}€")
 
     st.header("Trend prenotazioni")
 
@@ -68,8 +66,7 @@ if uploaded_file:
 
     revpar_forecast = suggested_price * occupancy_forecast
 
-    # Competitor pricing simulation
-
+# Competitor pricing
 competitor_price = adr * 1.1
 
 st.subheader("Analisi Competitor")
