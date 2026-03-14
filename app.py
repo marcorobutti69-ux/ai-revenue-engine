@@ -65,13 +65,10 @@ if not st.session_state.login:
         ).fetchone()
 
         if user:
-
             st.session_state.login = True
             st.session_state.hotel = user[3]
             st.rerun()
-
         else:
-
             st.error("Credenziali non valide")
 
     st.stop()
@@ -90,6 +87,10 @@ menu = st.sidebar.selectbox(
         "Occupancy Heatmap",
         "Booking Pace",
         "Daily Pricing",
+<<<<<<< HEAD
+=======
+        "Demand Calendar",
+>>>>>>> 4ff1095 (AI Revenue Engine v1)
         "AI Copilot"
     ]
 )
@@ -176,6 +177,7 @@ data = data.sort_values("date")
 data["pickup"] = data["rooms_sold"].diff().fillna(0)
 
 # -------------------------
+<<<<<<< HEAD
 # HEATMAP
 # -------------------------
 
@@ -190,6 +192,8 @@ heatmap_data = data.pivot_table(
 )
 
 # -------------------------
+=======
+>>>>>>> 4ff1095 (AI Revenue Engine v1)
 # FORECAST
 # -------------------------
 
@@ -241,6 +245,28 @@ for demand in forecast.flatten():
 
 daily_prices = np.array(daily_prices)
 
+<<<<<<< HEAD
+=======
+# -------------------------
+# DEMAND CALENDAR
+# -------------------------
+
+calendar_df = pd.DataFrame({
+    "day":future_days.flatten(),
+    "price":daily_prices
+})
+
+calendar_df["weekday"] = calendar_df["day"] % 7
+calendar_df["week"] = calendar_df["day"] // 7
+
+calendar_pivot = calendar_df.pivot_table(
+    values="price",
+    index="week",
+    columns="weekday",
+    aggfunc="mean"
+)
+
+>>>>>>> 4ff1095 (AI Revenue Engine v1)
 # -------------------------
 # REVENUE FORECAST
 # -------------------------
@@ -264,7 +290,7 @@ if menu == "Dashboard":
 
     fig = px.line(data, x="date", y="rooms_sold")
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig)
 
 # -------------------------
 # FORECAST
@@ -281,7 +307,11 @@ elif menu == "Forecast":
 
     fig = px.line(forecast_df, x="day", y="forecast")
 
+<<<<<<< HEAD
     st.plotly_chart(fig, use_container_width=True)
+=======
+    st.plotly_chart(fig)
+>>>>>>> 4ff1095 (AI Revenue Engine v1)
 
 # -------------------------
 # PRICING ENGINE
@@ -312,7 +342,7 @@ elif menu == "Revenue Forecast":
 
     fig = px.line(revenue_df, x="day", y="revenue")
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig)
 
 # -------------------------
 # HEATMAP
@@ -322,12 +352,65 @@ elif menu == "Occupancy Heatmap":
 
     st.title("Occupancy Heatmap")
 
+<<<<<<< HEAD
     fig = px.imshow(
         heatmap_data,
         labels=dict(x="Day", y="Week", color="Occupancy"),
         aspect="auto"
     )
 
+=======
+    heatmap_data = data.pivot_table(
+        values="occupancy",
+        index=data["date"].dt.isocalendar().week,
+        columns=data["date"].dt.dayofweek,
+        aggfunc="mean"
+    )
+
+    fig = px.imshow(heatmap_data)
+
+    st.plotly_chart(fig)
+
+# -------------------------
+# BOOKING PACE
+# -------------------------
+
+elif menu == "Booking Pace":
+
+    st.title("Booking Pace")
+
+    fig = px.bar(data, x="date", y="pickup")
+
+    st.plotly_chart(fig)
+
+# -------------------------
+# DAILY PRICING
+# -------------------------
+
+elif menu == "Daily Pricing":
+
+    st.title("AI Daily Pricing")
+
+    pricing_df = pd.DataFrame({
+        "day":future_days.flatten(),
+        "price":daily_prices
+    })
+
+    fig = px.line(pricing_df, x="day", y="price")
+
+    st.plotly_chart(fig)
+
+# -------------------------
+# DEMAND CALENDAR
+# -------------------------
+
+elif menu == "Demand Calendar":
+
+    st.title("AI Demand Calendar")
+
+    fig = px.imshow(calendar_pivot)
+
+>>>>>>> 4ff1095 (AI Revenue Engine v1)
     st.plotly_chart(fig)
 
 # -------------------------
@@ -367,6 +450,7 @@ elif menu == "AI Copilot":
 
     st.title("AI Revenue Advisor")
 
+<<<<<<< HEAD
     occ_forecast = predicted_demand / rooms
     pickup_recent = data["pickup"].tail(7).mean()
 
@@ -427,5 +511,19 @@ elif menu == "AI Copilot":
         st.write("•",a)
 
     st.subheader("Strategia consigliata")
+
+=======
+    occ = predicted_demand/rooms
+
+    if occ > 0.85:
+        strategy = "Alta domanda prevista: aumentare prezzi"
+    elif occ > 0.65:
+        strategy = "Domanda stabile"
+    else:
+        strategy = "Domanda bassa: attivare promozioni"
+
+    st.write("Domanda prevista:", round(predicted_demand))
+    st.write("Prezzo suggerito:", round(suggested_price))
+    st.write("Revenue previsto:", round(total_revenue))
 
     st.success(strategy)
