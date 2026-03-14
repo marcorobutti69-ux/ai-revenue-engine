@@ -1,25 +1,46 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import sqlite3
 from sklearn.linear_model import LinearRegression
+import plotly.express as px
 
-st.set_page_config(page_title="AI Revenue Engine SaaS", layout="wide")
+st.set_page_config(page_title="AI Revenue Engine PRO", layout="wide")
 
-# -------------------------
-# LOGIN MULTI HOTEL
-# -------------------------
+# ---------------------------
+# DATABASE
+# ---------------------------
 
-users = {
-    "hotel1": "password1",
-    "hotel2": "password2",
-    "admin": "hotel"
-}
+conn = sqlite3.connect("database.db", check_same_thread=False)
+cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS users(
+id INTEGER PRIMARY KEY,
+username TEXT,
+password TEXT,
+hotel TEXT
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS hotel_data(
+hotel TEXT,
+date TEXT,
+rooms_available INTEGER,
+rooms_sold INTEGER,
+ADR REAL
+)
+""")
+
+conn.commit()
+
+# ---------------------------
+# LOGIN
+# ---------------------------
 
 if "login" not in st.session_state:
     st.session_state.login = False
-
-if "hotel" not in st.session_state:
-    st.session_state.hotel = None
 
 if not st.session_state.login:
 
@@ -30,62 +51,89 @@ if not st.session_state.login:
 
     if st.button("Login"):
 
-        if username in users and password == users[username]:
+        user = cursor.execute(
+            "SELECT * FROM users WHERE username=? AND password=?",
+            (username,password)
+        ).fetchone()
+
+        if user:
 
             st.session_state.login = True
-            st.session_state.hotel = username
+            st.session_state.hotel = user[3]
 
         else:
+
             st.error("Credenziali non valide")
 
     st.stop()
 
-# -------------------------
-# SIDEBAR MENU
-# -------------------------
+# ---------------------------
+# SIDEBAR
+# ---------------------------
 
 menu = st.sidebar.selectbox(
     "Menu",
-    ["Dashboard", "Forecast", "Pricing", "Revenue Forecast", "AI Copilot"]
+    [
+        "Dashboard",
+        "Forecast",
+        "Pricing Engine",
+        "Revenue Forecast",
+        "AI Copilot"
+    ]
 )
 
-if st.session_state.hotel:
-    st.sidebar.write("Hotel:", st.session_state.hotel)
+st.sidebar.write("Hotel:", st.session_state.hotel)
 
-uploaded_file = st.sidebar.file_uploader(
-    "Carica dati hotel CSV",
-    type="csv"
+# ---------------------------
+# UPLOAD DATA
+# ---------------------------
+
+uploaded_file = st.sidebar.file_uploader("Carica dati hotel CSV", type="csv")
+
+if uploaded_file:
+
+    df = pd.read_csv(uploaded_file)
+
+    df["hotel"] = st.session_state.hotel
+
+    df.to_sql("hotel_data", conn, if_exists="append", index=False)
+
+    st.sidebar.success("Dati caricati")
+
+# ---------------------------
+# LOAD DATA
+# ---------------------------
+
+data = pd.read_sql(
+    f"SELECT * FROM hotel_data WHERE hotel='{st.session_state.hotel}'",
+    conn
 )
 
-# -------------------------
-# SE NON C'È FILE
-# -------------------------
+if len(data) == 0:
 
-if not uploaded_file:
+    st.title("Nessun dato hotel")
 
-    st.title("Carica i dati hotel")
-
-    st.info("Carica un file CSV per iniziare l'analisi revenue.")
+    st.info("Carica un CSV per iniziare")
 
     st.stop()
 
-# -------------------------
-# CARICAMENTO DATI
-# -------------------------
+data["date"] = pd.to_datetime(data["date"])
 
-data = pd.read_csv(uploaded_file)
-
-# KPI BASE
+# ---------------------------
+# KPI
+# ---------------------------
 
 data["occupancy"] = data["rooms_sold"] / data["rooms_available"]
 
-avg_occ = data["occupancy"].mean() * 100
+avg_occ = data["occupancy"].mean()*100
 adr = data["ADR"].mean()
-revpar = adr * (avg_occ / 100)
+revpar = adr*(avg_occ/100)
 
-# -------------------------
-# MACHINE LEARNING FORECAST
-# -------------------------
+rooms = data["rooms_available"].iloc[0]
+
+# ---------------------------
+# FORECAST AI
+# ---------------------------
 
 data["day"] = np.arange(len(data))
 
@@ -93,165 +141,156 @@ X = data[["day"]]
 y = data["rooms_sold"]
 
 model = LinearRegression()
-model.fit(X, y)
+model.fit(X,y)
 
-future_days = np.arange(len(data), len(data) + 365).reshape(-1, 1)
+future_days = np.arange(len(data), len(data)+365).reshape(-1,1)
 
 forecast = model.predict(future_days)
 
 predicted_demand = forecast.mean()
 
-# -------------------------
+# ---------------------------
 # PRICING ENGINE
-# -------------------------
+# ---------------------------
 
 if predicted_demand > 90:
-    suggested_price = adr * 1.2
+    suggested_price = adr*1.2
 elif predicted_demand > 75:
-    suggested_price = adr * 1.1
+    suggested_price = adr*1.1
 else:
-    suggested_price = adr * 0.9
+    suggested_price = adr*0.9
 
-rooms = data["rooms_available"].iloc[0]
+occupancy_forecast = predicted_demand/rooms
 
-occupancy_forecast = predicted_demand / rooms
-
-revpar_forecast = suggested_price * occupancy_forecast
-
-# -------------------------
+# ---------------------------
 # REVENUE FORECAST
-# -------------------------
+# ---------------------------
 
-forecast_revenue = forecast * suggested_price
+forecast_revenue = forecast*suggested_price
 
 total_revenue_365 = forecast_revenue.sum()
 
-# -------------------------
+# ---------------------------
 # DASHBOARD
-# -------------------------
+# ---------------------------
 
 if menu == "Dashboard":
 
     st.title("Revenue Dashboard")
 
-    col1, col2, col3 = st.columns(3)
+    col1,col2,col3 = st.columns(3)
 
     col1.metric("Occupancy", f"{avg_occ:.1f}%")
     col2.metric("ADR", f"{adr:.0f}€")
     col3.metric("RevPAR", f"{revpar:.0f}€")
 
-    st.subheader("Trend prenotazioni")
+    fig = px.line(data, x="date", y="rooms_sold", title="Trend prenotazioni")
 
-    st.line_chart(data["rooms_sold"])
+    st.plotly_chart(fig, use_container_width=True)
 
-# -------------------------
+# ---------------------------
 # FORECAST
-# -------------------------
+# ---------------------------
 
 elif menu == "Forecast":
 
     st.title("Demand Forecast 365 giorni")
 
-    st.line_chart(forecast)
+    forecast_df = pd.DataFrame({
+        "day":future_days.flatten(),
+        "forecast":forecast
+    })
+
+    fig = px.line(forecast_df, x="day", y="forecast")
+
+    st.plotly_chart(fig, use_container_width=True)
 
     st.metric("Domanda prevista media", f"{predicted_demand:.0f} camere")
 
-# -------------------------
+# ---------------------------
 # PRICING ENGINE
-# -------------------------
+# ---------------------------
 
-elif menu == "Pricing":
+elif menu == "Pricing Engine":
 
     st.title("AI Pricing Engine")
 
-    col1, col2 = st.columns(2)
+    col1,col2 = st.columns(2)
 
     col1.metric("ADR attuale", f"{adr:.0f}€")
     col2.metric("Prezzo suggerito AI", f"{suggested_price:.0f}€")
 
-    competitor_price = adr * 1.1
+    competitor_price = adr*1.1
 
-    st.subheader("Analisi Competitor")
-
-    st.metric("Prezzo medio competitor", f"{competitor_price:.0f}€")
+    st.metric("Prezzo competitor medio", f"{competitor_price:.0f}€")
 
     if suggested_price < competitor_price:
-        st.warning("Prezzo sotto la media competitor")
+        st.warning("Prezzo sotto mercato")
     else:
-        st.success("Prezzo competitivo rispetto al mercato")
+        st.success("Prezzo competitivo")
 
-    st.subheader("Simulatore prezzo")
+    new_price = st.slider("Simula nuovo prezzo",50,400,int(suggested_price))
 
-    new_price = st.slider(
-        "Simula nuovo prezzo camera",
-        50,
-        400,
-        int(suggested_price)
-    )
+    simulated_revenue = new_price*rooms*occupancy_forecast
 
-    simulated_revpar = new_price * occupancy_forecast
+    st.metric("Revenue simulato", f"{simulated_revenue:.0f}€")
 
-    simulated_revenue = new_price * rooms * occupancy_forecast
-
-    col3, col4 = st.columns(2)
-
-    col3.metric("RevPAR simulato", f"{simulated_revpar:.0f}€")
-    col4.metric("Revenue stimato", f"{simulated_revenue:.0f}€")
-
-# -------------------------
+# ---------------------------
 # REVENUE FORECAST
-# -------------------------
+# ---------------------------
 
 elif menu == "Revenue Forecast":
 
     st.title("Revenue Forecast 365 giorni")
 
-    st.line_chart(forecast_revenue)
+    revenue_df = pd.DataFrame({
+        "day":future_days.flatten(),
+        "revenue":forecast_revenue
+    })
 
-    st.metric("Revenue totale stimato anno", f"{total_revenue_365:,.0f}€")
+    fig = px.line(revenue_df, x="day", y="revenue")
 
-# -------------------------
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.metric("Revenue previsto anno", f"{total_revenue_365:,.0f}€")
+
+# ---------------------------
 # AI REVENUE COPILOT
-# -------------------------
+# ---------------------------
 
 elif menu == "AI Copilot":
 
     st.title("AI Revenue Copilot")
 
-    if "copilot_history" not in st.session_state:
-        st.session_state.copilot_history = []
+    if "chat" not in st.session_state:
+        st.session_state.chat=[]
 
-    question = st.chat_input("Chiedi all'AI Revenue Copilot")
+    question = st.chat_input("Fai una domanda al Revenue Copilot")
 
     if question:
 
-        st.session_state.copilot_history.append(("user", question))
-
-        weekend_demand = data["rooms_sold"].tail(7).mean()
-
-        if predicted_demand > weekend_demand:
-            strategy = "aumentare i prezzi nei giorni di alta domanda"
-        else:
-            strategy = "mantenere prezzi competitivi"
+        st.session_state.chat.append(("user",question))
 
         answer = f"""
 Analisi AI completata.
 
-Domanda prevista media: {predicted_demand:.0f} camere
-Prezzo suggerito: {suggested_price:.0f} €
+Domanda prevista media:
+{predicted_demand:.0f} camere
 
-ADR attuale: {adr:.0f} €
+Prezzo suggerito:
+{suggested_price:.0f} €
 
-Revenue stimato 365 giorni:
+Revenue previsto 365 giorni:
 {total_revenue_365:,.0f} €
 
-Strategia consigliata:
-{strategy}
+Strategia suggerita:
+aumentare prezzi nei giorni con alta domanda.
 """
 
-        st.session_state.copilot_history.append(("ai", answer))
+        st.session_state.chat.append(("ai",answer))
 
-    for role, text in st.session_state.copilot_history:
+    for role,text in st.session_state.chat:
 
-        with st.chat_message("user" if role == "user" else "assistant"):
+        with st.chat_message("user" if role=="user" else "assistant"):
             st.write(text)
+            
