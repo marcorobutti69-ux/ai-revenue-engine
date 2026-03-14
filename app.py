@@ -10,6 +10,8 @@ st.subheader("AI Revenue Management Dashboard")
 
 uploaded_file = st.file_uploader("Carica dati hotel CSV", type="csv")
 
+uploaded_file = st.file_uploader("Carica dati hotel CSV", type="csv")
+
 if uploaded_file:
 
     data = pd.read_csv(uploaded_file)
@@ -26,33 +28,25 @@ if uploaded_file:
     col2.metric("ADR medio", f"{adr:.0f}€")
     col3.metric("RevPAR medio", f"{revpar:.0f}€")
 
-    st.header("Trend prenotazioni")
+    st.subheader("Trend prenotazioni")
 
     st.line_chart(data["rooms_sold"])
 
-    st.header("Trend occupazione")
+    # AI forecast
 
-    st.line_chart(data["occupancy"])
+    data["day"] = np.arange(len(data))
 
-# AI forecast
+    X = data[["day"]]
+    y = data["rooms_sold"]
 
-data["day"] = np.arange(len(data))
+    model = LinearRegression()
+    model.fit(X, y)
 
-X = data[["day"]]
-y = data["rooms_sold"]
+    future_days = np.arange(len(data), len(data)+30).reshape(-1,1)
 
-model = LinearRegression()
-model.fit(X, y)
+    forecast = model.predict(future_days)
 
-future_days = np.arange(len(data), len(data)+30).reshape(-1,1)
-
-forecast = model.predict(future_days)
-
-st.subheader("Forecast occupazione 30 giorni")
-
-st.line_chart(forecast)
-
-predicted_demand = forecast.mean()
+    predicted_demand = forecast.mean()
 
 # calcolo prezzo AI
 
