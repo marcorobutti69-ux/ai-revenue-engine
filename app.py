@@ -5,14 +5,29 @@ import sqlite3
 from sklearn.linear_model import LinearRegression
 import plotly.express as px
 
-st.set_page_config(page_title="AI Revenue Engine", layout="wide")
-
 # -------------------------
-# DATABASE
+# CONFIG
 # -------------------------
 
-conn = sqlite3.connect("database.db", check_same_thread=False)
+st.set_page_config(
+    page_title="AI Revenue Engine",
+    layout="wide"
+)
+
+# -------------------------
+# DATABASE CONNECTION
+# -------------------------
+
+@st.cache_resource
+def get_connection():
+    return sqlite3.connect("database.db", check_same_thread=False)
+
+conn = get_connection()
 cursor = conn.cursor()
+
+# -------------------------
+# DATABASE TABLES
+# -------------------------
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users(
@@ -33,12 +48,18 @@ ADR REAL
 )
 """)
 
+conn.commit()
+
+# -------------------------
+# CREATE ADMIN
+# -------------------------
+
 cursor.execute("SELECT * FROM users WHERE username='admin'")
 admin = cursor.fetchone()
 
 if admin is None:
     cursor.execute(
-        "INSERT INTO users (username,password,hotel) VALUES (?,?,?)",
+        "INSERT INTO users VALUES (NULL,?,?,?)",
         ("admin","hotel","DemoHotel")
     )
     conn.commit()
@@ -95,7 +116,7 @@ menu = st.sidebar.selectbox(
 st.sidebar.write("Hotel:", st.session_state.hotel)
 
 # -------------------------
-# UPLOAD CSV
+# CSV UPLOAD
 # -------------------------
 
 uploaded_file = st.sidebar.file_uploader(
@@ -107,27 +128,16 @@ if uploaded_file:
 
     df = pd.read_csv(uploaded_file)
 
-    required_columns = [
-        "date",
-        "rooms_available",
-        "rooms_sold",
-        "ADR"
-    ]
+    required = ["date","rooms_available","rooms_sold","ADR"]
 
-    if not all(col in df.columns for col in required_columns):
+    if not all(col in df.columns for col in required):
         st.error("CSV non valido")
         st.stop()
 
     df["hotel"] = st.session_state.hotel
 
     df = df[
-        [
-            "hotel",
-            "date",
-            "rooms_available",
-            "rooms_sold",
-            "ADR"
-        ]
+        ["hotel","date","rooms_available","rooms_sold","ADR"]
     ]
 
     df.to_sql("hotel_data", conn, if_exists="append", index=False)
@@ -154,14 +164,14 @@ if len(data) == 0:
 data["date"] = pd.to_datetime(data["date"])
 
 # -------------------------
-# KPI
+# KPI CALCULATION
 # -------------------------
 
 data["occupancy"] = data["rooms_sold"] / data["rooms_available"]
 
-avg_occ = data["occupancy"].mean() * 100
+avg_occ = data["occupancy"].mean()*100
 adr = data["ADR"].mean()
-revpar = adr * (avg_occ / 100)
+revpar = adr*(avg_occ/100)
 
 rooms = data["rooms_available"].iloc[0]
 
@@ -182,7 +192,7 @@ X = data[["day"]]
 y = data["rooms_sold"]
 
 model = LinearRegression()
-model.fit(X, y)
+model.fit(X,y)
 
 future_days = np.arange(len(data), len(data)+365).reshape(-1,1)
 
@@ -215,9 +225,11 @@ competitor_price = adr * 1.1
 daily_prices = []
 
 for demand in forecast.flatten():
+
     occ = demand / rooms
     factor = 1 + occ
     price = adr * factor
+
     daily_prices.append(price)
 
 daily_prices = np.array(daily_prices)
@@ -263,8 +275,7 @@ if menu == "Dashboard":
     col3.metric("RevPAR", f"{revpar:.0f}€")
 
     fig = px.line(data, x="date", y="rooms_sold")
-
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width=True)
 
 # -------------------------
 # FORECAST
@@ -280,11 +291,10 @@ elif menu == "Forecast":
     })
 
     fig = px.line(forecast_df, x="day", y="forecast")
-
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width=True)
 
 # -------------------------
-# PRICING ENGINE
+# PRICING
 # -------------------------
 
 elif menu == "Pricing Engine":
@@ -293,9 +303,9 @@ elif menu == "Pricing Engine":
 
     col1,col2,col3 = st.columns(3)
 
-    col1.metric("ADR attuale", f"{adr:.0f}€")
-    col2.metric("Prezzo suggerito", f"{suggested_price:.0f}€")
-    col3.metric("Prezzo competitor", f"{competitor_price:.0f}€")
+    col1.metric("ADR", f"{adr:.0f}€")
+    col2.metric("Suggested Price", f"{suggested_price:.0f}€")
+    col3.metric("Competitor Price", f"{competitor_price:.0f}€")
 
 # -------------------------
 # REVENUE FORECAST
@@ -311,8 +321,9 @@ elif menu == "Revenue Forecast":
     })
 
     fig = px.line(revenue_df, x="day", y="revenue")
+    st.plotly_chart(fig, use_container_width=True)
 
-    st.plotly_chart(fig)
+    st.metric("Revenue Previsto", f"{total_revenue:,.0f}€")
 
 # -------------------------
 # HEATMAP
@@ -322,15 +333,13 @@ elif menu == "Occupancy Heatmap":
 
     st.title("Occupancy Heatmap")
 
-    heatmap_data = data.pivot_table(
+    heatmap = data.pivot_table(
         values="occupancy",
         index=data["date"].dt.isocalendar().week,
-        columns=data["date"].dt.dayofweek,
-        aggfunc="mean"
+        columns=data["date"].dt.dayofweek
     )
 
-    fig = px.imshow(heatmap_data)
-
+    fig = px.imshow(heatmap)
     st.plotly_chart(fig)
 
 # -------------------------
@@ -342,7 +351,6 @@ elif menu == "Booking Pace":
     st.title("Booking Pace")
 
     fig = px.bar(data, x="date", y="pickup")
-
     st.plotly_chart(fig)
 
 # -------------------------
@@ -351,7 +359,7 @@ elif menu == "Booking Pace":
 
 elif menu == "Daily Pricing":
 
-    st.title("AI Daily Pricing")
+    st.title("Daily Pricing")
 
     pricing_df = pd.DataFrame({
         "day":future_days.flatten(),
@@ -359,7 +367,6 @@ elif menu == "Daily Pricing":
     })
 
     fig = px.line(pricing_df, x="day", y="price")
-
     st.plotly_chart(fig)
 
 # -------------------------
@@ -368,10 +375,9 @@ elif menu == "Daily Pricing":
 
 elif menu == "Demand Calendar":
 
-    st.title("AI Demand Calendar")
+    st.title("Demand Calendar")
 
     fig = px.imshow(calendar_pivot)
-
     st.plotly_chart(fig)
 
 # -------------------------
