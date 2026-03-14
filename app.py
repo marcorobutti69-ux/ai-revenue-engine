@@ -134,5 +134,34 @@ if uploaded_file:
     col7.metric("RevPAR simulato", f"{simulated_revpar:.0f}€")
     col8.metric("Revenue stimato", f"{simulated_revenue:.0f}€")
 
+st.subheader("AI Revenue Assistant")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+user_input = st.chat_input("Fai una domanda sul revenue dell'hotel")
+
+if user_input:
+
+    st.session_state.messages.append({"role": "user", "content": user_input})
+
+    if "prezzo" in user_input.lower():
+        response = f"Il prezzo suggerito è circa {suggested_price:.0f}€"
+
+    elif "domanda" in user_input.lower():
+        response = f"La domanda prevista media è {predicted_demand:.0f} camere"
+
+    elif "revenue" in user_input.lower():
+        response = f"Il revenue stimato annuale è {total_revenue_365:,.0f}€"
+
+    else:
+        response = "Posso aiutarti con forecast domanda, prezzo suggerito o revenue previsto."
+
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+
 
 
