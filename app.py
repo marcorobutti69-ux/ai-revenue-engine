@@ -44,7 +44,7 @@ if uploaded_file:
     model = LinearRegression()
     model.fit(X,y)
 
-    future_days = np.arange(len(data), len(data)+30).reshape(-1,1)
+    future_days = np.arange(len(data), len(data)+365).reshape(-1,1)
 
     forecast = model.predict(future_days)
 
@@ -68,19 +68,44 @@ if uploaded_file:
 
     revpar_forecast = suggested_price * occupancy_forecast
 
+    # Competitor pricing simulation
+
+    competitor_price = adr * 1.1
+
+    st.subheader("Analisi Competitor")
+
+    st.metric("Prezzo medio competitor", f"{competitor_price:.0f}€")
+
+   if suggested_price < competitor_price:
+    st.warning("Prezzo sotto la media competitor")
+   else:
+    st.success("Prezzo competitivo rispetto al mercato")
+
+
     st.header("AI Pricing Recommendation")
 
-    col4, col5, col6 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
-    col4.metric("Domanda prevista", f"{predicted_demand:.0f}")
-    col5.metric("Prezzo suggerito", f"{suggested_price:.0f}€")
-    col6.metric("RevPAR previsto", f"{revpar_forecast:.0f}€")
+    col1.metric("Occupancy", f"{avg_occ:.1f}%")
+    col2.metric("ADR", f"{adr:.0f}€")
+    col3.metric("RevPAR", f"{revpar:.0f}€")
+    col4.metric("Forecast Demand", f"{predicted_demand:.0f}")
+
+    
+    
 
     st.success(alert)
 
     st.header("Simulatore prezzo")
 
     new_price = st.slider("Simula prezzo camera", 50, 400, int(suggested_price))
+
+    rooms = data["rooms_available"].iloc[0]
+
+    simulated_revenue = new_price * rooms * occupancy_forecast
+
+    st.metric("Revenue stimato", f"{simulated_revenue:.0f}€")
+
 
     simulated_revpar = new_price * occupancy_forecast
 
