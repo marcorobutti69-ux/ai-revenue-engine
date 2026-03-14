@@ -70,16 +70,17 @@ if uploaded_file:
 
     # Competitor pricing simulation
 
-    competitor_price = adr * 1.1
+competitor_price = adr * 1.1
 
-    st.subheader("Analisi Competitor")
+st.subheader("Analisi Competitor")
 
-    st.metric("Prezzo medio competitor", f"{competitor_price:.0f}€")
+st.metric("Prezzo medio competitor", f"{competitor_price:.0f}€")
 
-   if suggested_price < competitor_price:
+if suggested_price < competitor_price:
     st.warning("Prezzo sotto la media competitor")
-   else:
+else:
     st.success("Prezzo competitivo rispetto al mercato")
+
 
 
     st.header("AI Pricing Recommendation")
