@@ -33,7 +33,6 @@ ADR REAL
 )
 """)
 
-# crea admin
 cursor.execute("SELECT * FROM users WHERE username='admin'")
 admin = cursor.fetchone()
 
@@ -69,7 +68,6 @@ if not st.session_state.login:
 
             st.session_state.login = True
             st.session_state.hotel = user[3]
-
             st.rerun()
 
         else:
@@ -89,6 +87,9 @@ menu = st.sidebar.selectbox(
         "Forecast",
         "Pricing Engine",
         "Revenue Forecast",
+        "Occupancy Heatmap",
+        "Booking Pace",
+        "Daily Pricing",
         "AI Copilot"
     ]
 )
@@ -121,23 +122,19 @@ if uploaded_file:
 
     df["hotel"] = st.session_state.hotel
 
-    df = df[[
-        "hotel",
-        "date",
-        "rooms_available",
-        "rooms_sold",
-        "ADR"
-    ]]
+    df = df[
+        [
+            "hotel",
+            "date",
+            "rooms_available",
+            "rooms_sold",
+            "ADR"
+        ]
+    ]
 
-    try:
+    df.to_sql("hotel_data", conn, if_exists="append", index=False)
 
-        df.to_sql("hotel_data", conn, if_exists="append", index=False)
-
-        st.sidebar.success("Dati caricati")
-
-    except Exception as e:
-
-        st.error(f"Errore caricamento dati: {e}")
+    st.sidebar.success("Dati caricati")
 
 # -------------------------
 # LOAD DATA
@@ -154,9 +151,7 @@ data = pd.read_sql(
 if len(data) == 0:
 
     st.title("Nessun dato disponibile")
-
     st.info("Carica un CSV per iniziare")
-
     st.stop()
 
 data["date"] = pd.to_datetime(data["date"])
@@ -174,6 +169,27 @@ revpar = adr*(avg_occ/100)
 rooms = data["rooms_available"].iloc[0]
 
 # -------------------------
+# BOOKING PACE
+# -------------------------
+
+data = data.sort_values("date")
+data["pickup"] = data["rooms_sold"].diff().fillna(0)
+
+# -------------------------
+# HEATMAP
+# -------------------------
+
+data["weekday"] = data["date"].dt.day_name()
+data["week"] = data["date"].dt.isocalendar().week
+
+heatmap_data = data.pivot_table(
+    values="occupancy",
+    index="week",
+    columns="weekday",
+    aggfunc="mean"
+)
+
+# -------------------------
 # FORECAST
 # -------------------------
 
@@ -188,6 +204,7 @@ model.fit(X,y)
 future_days = np.arange(len(data), len(data)+365).reshape(-1,1)
 
 forecast = model.predict(future_days)
+forecast = np.maximum(forecast,0)
 
 predicted_demand = forecast.mean()
 
@@ -206,12 +223,29 @@ elif occupancy_forecast > 0.50:
 else:
     suggested_price = adr*0.90
 
+competitor_price = adr*1.1
+
+# -------------------------
+# DAILY PRICING
+# -------------------------
+
+daily_prices = []
+
+for demand in forecast.flatten():
+
+    occ = demand / rooms
+    factor = 1 + occ
+    price = adr * factor
+
+    daily_prices.append(price)
+
+daily_prices = np.array(daily_prices)
+
 # -------------------------
 # REVENUE FORECAST
 # -------------------------
 
-forecast_revenue = forecast*suggested_price
-
+forecast_revenue = forecast.flatten()*suggested_price
 total_revenue = forecast_revenue.sum()
 
 # -------------------------
@@ -228,7 +262,7 @@ if menu == "Dashboard":
     col2.metric("ADR", f"{adr:.0f}€")
     col3.metric("RevPAR", f"{revpar:.0f}€")
 
-    fig = px.line(data, x="date", y="rooms_sold", title="Trend prenotazioni")
+    fig = px.line(data, x="date", y="rooms_sold")
 
     st.plotly_chart(fig, use_container_width=True)
 
@@ -238,35 +272,30 @@ if menu == "Dashboard":
 
 elif menu == "Forecast":
 
-    st.title("Demand Forecast 365 giorni")
+    st.title("Demand Forecast")
 
     forecast_df = pd.DataFrame({
         "day":future_days.flatten(),
-        "forecast":forecast
+        "forecast":forecast.flatten()
     })
 
     fig = px.line(forecast_df, x="day", y="forecast")
 
     st.plotly_chart(fig, use_container_width=True)
 
-    st.metric("Domanda prevista media", f"{predicted_demand:.0f} camere")
-
 # -------------------------
-# PRICING
+# PRICING ENGINE
 # -------------------------
 
 elif menu == "Pricing Engine":
 
     st.title("AI Pricing Engine")
 
-    col1,col2 = st.columns(2)
+    col1,col2,col3 = st.columns(3)
 
     col1.metric("ADR attuale", f"{adr:.0f}€")
     col2.metric("Prezzo suggerito", f"{suggested_price:.0f}€")
-
-    competitor_price = adr*1.1
-
-    st.metric("Prezzo competitor medio", f"{competitor_price:.0f}€")
+    col3.metric("Prezzo competitor", f"{competitor_price:.0f}€")
 
 # -------------------------
 # REVENUE FORECAST
@@ -274,7 +303,7 @@ elif menu == "Pricing Engine":
 
 elif menu == "Revenue Forecast":
 
-    st.title("Revenue Forecast 365 giorni")
+    st.title("Revenue Forecast")
 
     revenue_df = pd.DataFrame({
         "day":future_days.flatten(),
@@ -285,7 +314,50 @@ elif menu == "Revenue Forecast":
 
     st.plotly_chart(fig, use_container_width=True)
 
-    st.metric("Revenue previsto anno", f"{total_revenue:,.0f}€")
+# -------------------------
+# HEATMAP
+# -------------------------
+
+elif menu == "Occupancy Heatmap":
+
+    st.title("Occupancy Heatmap")
+
+    fig = px.imshow(
+        heatmap_data,
+        labels=dict(x="Day", y="Week", color="Occupancy"),
+        aspect="auto"
+    )
+
+    st.plotly_chart(fig)
+
+# -------------------------
+# BOOKING PACE
+# -------------------------
+
+elif menu == "Booking Pace":
+
+    st.title("Booking Pace")
+
+    fig = px.bar(data, x="date", y="pickup")
+
+    st.plotly_chart(fig)
+
+# -------------------------
+# DAILY PRICING
+# -------------------------
+
+elif menu == "Daily Pricing":
+
+    st.title("AI Daily Pricing")
+
+    pricing_df = pd.DataFrame({
+        "day":future_days.flatten(),
+        "price":daily_prices
+    })
+
+    fig = px.line(pricing_df, x="day", y="price")
+
+    st.plotly_chart(fig)
 
 # -------------------------
 # AI COPILOT
@@ -295,34 +367,27 @@ elif menu == "AI Copilot":
 
     st.title("AI Revenue Copilot")
 
-    if "chat" not in st.session_state:
-        st.session_state.chat=[]
-
     question = st.chat_input("Fai una domanda")
 
     if question:
 
-        st.session_state.chat.append(("user",question))
+        occ = predicted_demand/rooms
 
-        answer = f"""
-Analisi AI completata.
+        if occ > 0.85:
+            strategy = "Alta domanda prevista: aumentare prezzi"
+        elif occ > 0.65:
+            strategy = "Domanda stabile"
+        else:
+            strategy = "Domanda bassa: attivare promozioni"
 
-Domanda prevista media:
-{predicted_demand:.0f} camere
+        st.chat_message("assistant").write(
+f"""
+Domanda prevista: {predicted_demand:.0f}
 
-Prezzo suggerito:
-{suggested_price:.0f} €
+Prezzo suggerito: {suggested_price:.0f}€
 
-Revenue previsto 365 giorni:
-{total_revenue:,.0f} €
+Revenue previsto: {total_revenue:,.0f}€
 
-Strategia suggerita:
-aumentare prezzi nei giorni con alta domanda
+Strategia: {strategy}
 """
-
-        st.session_state.chat.append(("ai",answer))
-
-    for role,text in st.session_state.chat:
-
-        with st.chat_message("user" if role=="user" else "assistant"):
-            st.write(text)
+)
