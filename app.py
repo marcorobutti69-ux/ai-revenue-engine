@@ -5,7 +5,7 @@ import sqlite3
 from sklearn.linear_model import LinearRegression
 import plotly.express as px
 
-st.set_page_config(page_title="AI Revenue Engine PRO", layout="wide")
+st.set_page_config(page_title="AI Revenue Engine", layout="wide")
 
 # -------------------------
 # DATABASE
@@ -33,17 +33,15 @@ ADR REAL
 )
 """)
 
-# crea utente admin se non esiste
+# crea admin
 cursor.execute("SELECT * FROM users WHERE username='admin'")
 admin = cursor.fetchone()
 
 if admin is None:
-
     cursor.execute(
         "INSERT INTO users (username,password,hotel) VALUES (?,?,?)",
         ("admin","hotel","DemoHotel")
     )
-
     conn.commit()
 
 # -------------------------
@@ -110,24 +108,52 @@ if uploaded_file:
 
     df = pd.read_csv(uploaded_file)
 
+    required_columns = [
+        "date",
+        "rooms_available",
+        "rooms_sold",
+        "ADR"
+    ]
+
+    if not all(col in df.columns for col in required_columns):
+        st.error("CSV non valido")
+        st.stop()
+
     df["hotel"] = st.session_state.hotel
 
-    df.to_sql("hotel_data", conn, if_exists="append", index=False)
+    df = df[[
+        "hotel",
+        "date",
+        "rooms_available",
+        "rooms_sold",
+        "ADR"
+    ]]
 
-    st.sidebar.success("Dati caricati nel database")
+    try:
+
+        df.to_sql("hotel_data", conn, if_exists="append", index=False)
+
+        st.sidebar.success("Dati caricati")
+
+    except Exception as e:
+
+        st.error(f"Errore caricamento dati: {e}")
 
 # -------------------------
 # LOAD DATA
 # -------------------------
 
+query = "SELECT * FROM hotel_data WHERE hotel=?"
+
 data = pd.read_sql(
-    f"SELECT * FROM hotel_data WHERE hotel='{st.session_state.hotel}'",
-    conn
+    query,
+    conn,
+    params=(st.session_state.hotel,)
 )
 
 if len(data) == 0:
 
-    st.title("Nessun dato hotel")
+    st.title("Nessun dato disponibile")
 
     st.info("Carica un CSV per iniziare")
 
@@ -148,7 +174,7 @@ revpar = adr*(avg_occ/100)
 rooms = data["rooms_available"].iloc[0]
 
 # -------------------------
-# FORECAST AI
+# FORECAST
 # -------------------------
 
 data["day"] = np.arange(len(data))
@@ -169,14 +195,16 @@ predicted_demand = forecast.mean()
 # PRICING ENGINE
 # -------------------------
 
-if predicted_demand > 90:
-    suggested_price = adr*1.2
-elif predicted_demand > 75:
-    suggested_price = adr*1.1
-else:
-    suggested_price = adr*0.9
-
 occupancy_forecast = predicted_demand/rooms
+
+if occupancy_forecast > 0.85:
+    suggested_price = adr*1.25
+elif occupancy_forecast > 0.70:
+    suggested_price = adr*1.15
+elif occupancy_forecast > 0.50:
+    suggested_price = adr*1.05
+else:
+    suggested_price = adr*0.90
 
 # -------------------------
 # REVENUE FORECAST
@@ -184,7 +212,7 @@ occupancy_forecast = predicted_demand/rooms
 
 forecast_revenue = forecast*suggested_price
 
-total_revenue_365 = forecast_revenue.sum()
+total_revenue = forecast_revenue.sum()
 
 # -------------------------
 # DASHBOARD
@@ -240,11 +268,6 @@ elif menu == "Pricing Engine":
 
     st.metric("Prezzo competitor medio", f"{competitor_price:.0f}€")
 
-    if suggested_price < competitor_price:
-        st.warning("Prezzo sotto mercato")
-    else:
-        st.success("Prezzo competitivo")
-
 # -------------------------
 # REVENUE FORECAST
 # -------------------------
@@ -262,7 +285,7 @@ elif menu == "Revenue Forecast":
 
     st.plotly_chart(fig, use_container_width=True)
 
-    st.metric("Revenue previsto anno", f"{total_revenue_365:,.0f}€")
+    st.metric("Revenue previsto anno", f"{total_revenue:,.0f}€")
 
 # -------------------------
 # AI COPILOT
@@ -291,7 +314,7 @@ Prezzo suggerito:
 {suggested_price:.0f} €
 
 Revenue previsto 365 giorni:
-{total_revenue_365:,.0f} €
+{total_revenue:,.0f} €
 
 Strategia suggerita:
 aumentare prezzi nei giorni con alta domanda
