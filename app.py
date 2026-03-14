@@ -360,82 +360,72 @@ elif menu == "Daily Pricing":
     st.plotly_chart(fig)
 
 # -------------------------
-# AI COPILOT
+# AI COPILOT 2.0
 # -------------------------
 
 elif menu == "AI Copilot":
 
-    st.title("AI Revenue Copilot")
+    st.title("AI Revenue Advisor")
 
-    if "chat" not in st.session_state:
-        st.session_state.chat=[]
+    occ_forecast = predicted_demand / rooms
+    pickup_recent = data["pickup"].tail(7).mean()
 
-    question = st.chat_input("Fai una domanda")
+    # indicatori
 
-    if question:
+    st.subheader("Indicatori chiave")
 
-        st.session_state.chat.append(("user",question))
+    col1,col2,col3 = st.columns(3)
 
-        occ = predicted_demand / rooms
+    col1.metric("Domanda prevista", f"{predicted_demand:.0f} camere")
+    col2.metric("Occupazione prevista", f"{occ_forecast*100:.1f}%")
+    col3.metric("Pickup medio (7 giorni)", f"{pickup_recent:.1f}")
 
-        pickup_trend = data["pickup"].tail(7).mean()
+    st.metric("Prezzo suggerito", f"{suggested_price:.0f}€")
+    st.metric("Prezzo competitor", f"{competitor_price:.0f}€")
 
-        analysis = []
+    # analisi AI
 
-        if occ > 0.85:
-            analysis.append("domanda molto alta")
+    analysis = []
 
-        elif occ > 0.65:
-            analysis.append("domanda stabile")
+    if occ_forecast > 0.85:
+        analysis.append("domanda molto alta")
 
-        else:
-            analysis.append("domanda debole")
+    elif occ_forecast > 0.65:
+        analysis.append("domanda stabile")
 
-        if pickup_trend > 2:
-            analysis.append("pickup in crescita")
+    else:
+        analysis.append("domanda debole")
 
-        elif pickup_trend < 0:
-            analysis.append("pickup in calo")
+    if pickup_recent > 2:
+        analysis.append("pickup in crescita")
 
-        if suggested_price < competitor_price:
-            analysis.append("prezzo sotto mercato")
+    elif pickup_recent < 0:
+        analysis.append("pickup in calo")
 
-        elif suggested_price > competitor_price:
-            analysis.append("prezzo sopra mercato")
+    if suggested_price < competitor_price:
+        analysis.append("prezzo sotto mercato")
 
-        # strategia
+    elif suggested_price > competitor_price:
+        analysis.append("prezzo sopra mercato")
 
-        if occ > 0.85 and pickup_trend > 1:
-            strategy = "aumentare prezzi del 10-15%"
+    # strategia
 
-        elif occ > 0.65:
-            strategy = "mantenere prezzi attuali"
+    if occ_forecast > 0.85 and pickup_recent > 1:
+        strategy = "Aumentare prezzi del 10-15% nei prossimi giorni"
 
-        else:
-            strategy = "attivare promozioni o campagne marketing"
+    elif occ_forecast > 0.65:
+        strategy = "Mantenere pricing attuale e monitorare pickup"
 
-        answer = f"""
-Domanda prevista: {predicted_demand:.0f} camere
+    else:
+        strategy = "Attivare promozioni e campagne marketing"
 
-Occupazione prevista: {occ*100:.1f}%
+    # report
 
-Prezzo suggerito: {suggested_price:.0f} €
+    st.subheader("Analisi AI")
 
-Prezzo competitor: {competitor_price:.0f} €
+    for a in analysis:
+        st.write("•",a)
 
-Revenue previsto: {total_revenue:,.0f} €
+    st.subheader("Strategia consigliata")
 
-Analisi AI:
-- {analysis[0]}
-{''.join([f"- {a}\n" for a in analysis[1:]])}
-
-Strategia consigliata:
-{strategy}
-"""
-
-        st.session_state.chat.append(("ai",answer))
-
-    for role,text in st.session_state.chat:
-
-        with st.chat_message("user" if role=="user" else "assistant"):
-            st.write(text)
+    st.success(strategy)
