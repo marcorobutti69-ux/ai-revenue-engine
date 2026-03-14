@@ -64,9 +64,9 @@ if uploaded_file:
 
     occupancy_forecast = predicted_demand / data["rooms_available"].iloc[0]
 
-    revpar_forecast = suggested_price * occupancy_forecast
+revpar_forecast = suggested_price * occupancy_forecast
 
-# Competitor pricing
+# Competitor pricing simulation
 competitor_price = adr * 1.1
 
 st.subheader("Analisi Competitor")
