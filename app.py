@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -6,9 +5,9 @@ from sklearn.linear_model import LinearRegression
 
 st.set_page_config(page_title="AI Revenue Engine SaaS", layout="wide")
 
-# -----------------------
+# -------------------------
 # LOGIN MULTI HOTEL
-# -----------------------
+# -------------------------
 
 users = {
     "hotel1": "password1",
@@ -18,6 +17,9 @@ users = {
 
 if "login" not in st.session_state:
     st.session_state.login = False
+
+if "hotel" not in st.session_state:
+    st.session_state.hotel = None
 
 if not st.session_state.login:
 
@@ -29,195 +31,210 @@ if not st.session_state.login:
     if st.button("Login"):
 
         if username in users and password == users[username]:
+
             st.session_state.login = True
             st.session_state.hotel = username
+
         else:
             st.error("Credenziali non valide")
 
     st.stop()
 
-# -----------------------
-# MENU SAAS
-# -----------------------
+# -------------------------
+# SIDEBAR MENU
+# -------------------------
 
 menu = st.sidebar.selectbox(
     "Menu",
-    ["Dashboard","Forecast","Pricing","Revenue Forecast","AI Copilot"]
+    ["Dashboard", "Forecast", "Pricing", "Revenue Forecast", "AI Copilot"]
 )
 
-st.sidebar.write("Hotel:", st.session_state.hotel)
-
-# -----------------------
-# UPLOAD DATA
-# -----------------------
+if st.session_state.hotel:
+    st.sidebar.write("Hotel:", st.session_state.hotel)
 
 uploaded_file = st.sidebar.file_uploader(
     "Carica dati hotel CSV",
-    type="csv",
-    key="hotel_csv"
+    type="csv"
 )
 
-if uploaded_file:
+# -------------------------
+# SE NON C'È FILE
+# -------------------------
 
-    data = pd.read_csv(uploaded_file)
+if not uploaded_file:
 
-    # -----------------------
-    # KPI HOTEL
-    # -----------------------
+    st.title("Carica i dati hotel")
 
-    data["occupancy"] = data["rooms_sold"] / data["rooms_available"]
+    st.info("Carica un file CSV per iniziare l'analisi revenue.")
 
-    avg_occ = data["occupancy"].mean() * 100
-    adr = data["ADR"].mean()
-    revpar = adr * (avg_occ / 100)
+    st.stop()
 
-    # -----------------------
-    # FORECAST MACHINE LEARNING
-    # -----------------------
+# -------------------------
+# CARICAMENTO DATI
+# -------------------------
 
-    data["day"] = np.arange(len(data))
+data = pd.read_csv(uploaded_file)
 
-    X = data[["day"]]
-    y = data["rooms_sold"]
+# KPI BASE
 
-    model = LinearRegression()
-    model.fit(X, y)
+data["occupancy"] = data["rooms_sold"] / data["rooms_available"]
 
-    future_days = np.arange(len(data), len(data) + 365).reshape(-1,1)
+avg_occ = data["occupancy"].mean() * 100
+adr = data["ADR"].mean()
+revpar = adr * (avg_occ / 100)
 
-    forecast = model.predict(future_days)
+# -------------------------
+# MACHINE LEARNING FORECAST
+# -------------------------
 
-    predicted_demand = forecast.mean()
+data["day"] = np.arange(len(data))
 
-    # -----------------------
-    # PRICING ENGINE
-    # -----------------------
+X = data[["day"]]
+y = data["rooms_sold"]
 
-    if predicted_demand > 90:
-        suggested_price = adr * 1.2
-    elif predicted_demand > 75:
-        suggested_price = adr * 1.1
+model = LinearRegression()
+model.fit(X, y)
+
+future_days = np.arange(len(data), len(data) + 365).reshape(-1, 1)
+
+forecast = model.predict(future_days)
+
+predicted_demand = forecast.mean()
+
+# -------------------------
+# PRICING ENGINE
+# -------------------------
+
+if predicted_demand > 90:
+    suggested_price = adr * 1.2
+elif predicted_demand > 75:
+    suggested_price = adr * 1.1
+else:
+    suggested_price = adr * 0.9
+
+rooms = data["rooms_available"].iloc[0]
+
+occupancy_forecast = predicted_demand / rooms
+
+revpar_forecast = suggested_price * occupancy_forecast
+
+# -------------------------
+# REVENUE FORECAST
+# -------------------------
+
+forecast_revenue = forecast * suggested_price
+
+total_revenue_365 = forecast_revenue.sum()
+
+# -------------------------
+# DASHBOARD
+# -------------------------
+
+if menu == "Dashboard":
+
+    st.title("Revenue Dashboard")
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("Occupancy", f"{avg_occ:.1f}%")
+    col2.metric("ADR", f"{adr:.0f}€")
+    col3.metric("RevPAR", f"{revpar:.0f}€")
+
+    st.subheader("Trend prenotazioni")
+
+    st.line_chart(data["rooms_sold"])
+
+# -------------------------
+# FORECAST
+# -------------------------
+
+elif menu == "Forecast":
+
+    st.title("Demand Forecast 365 giorni")
+
+    st.line_chart(forecast)
+
+    st.metric("Domanda prevista media", f"{predicted_demand:.0f} camere")
+
+# -------------------------
+# PRICING ENGINE
+# -------------------------
+
+elif menu == "Pricing":
+
+    st.title("AI Pricing Engine")
+
+    col1, col2 = st.columns(2)
+
+    col1.metric("ADR attuale", f"{adr:.0f}€")
+    col2.metric("Prezzo suggerito AI", f"{suggested_price:.0f}€")
+
+    competitor_price = adr * 1.1
+
+    st.subheader("Analisi Competitor")
+
+    st.metric("Prezzo medio competitor", f"{competitor_price:.0f}€")
+
+    if suggested_price < competitor_price:
+        st.warning("Prezzo sotto la media competitor")
     else:
-        suggested_price = adr * 0.9
+        st.success("Prezzo competitivo rispetto al mercato")
 
-    occupancy_forecast = predicted_demand / data["rooms_available"].iloc[0]
+    st.subheader("Simulatore prezzo")
 
-    revpar_forecast = suggested_price * occupancy_forecast
+    new_price = st.slider(
+        "Simula nuovo prezzo camera",
+        50,
+        400,
+        int(suggested_price)
+    )
 
-    # -----------------------
-    # REVENUE FORECAST
-    # -----------------------
+    simulated_revpar = new_price * occupancy_forecast
 
-    forecast_revenue = forecast * suggested_price
+    simulated_revenue = new_price * rooms * occupancy_forecast
 
-    total_revenue_365 = forecast_revenue.sum()
+    col3, col4 = st.columns(2)
 
-    rooms = data["rooms_available"].iloc[0]
+    col3.metric("RevPAR simulato", f"{simulated_revpar:.0f}€")
+    col4.metric("Revenue stimato", f"{simulated_revenue:.0f}€")
 
-    # -----------------------
-    # DASHBOARD
-    # -----------------------
+# -------------------------
+# REVENUE FORECAST
+# -------------------------
 
-    if menu == "Dashboard":
+elif menu == "Revenue Forecast":
 
-        st.title("Revenue Dashboard")
+    st.title("Revenue Forecast 365 giorni")
 
-        col1, col2, col3 = st.columns(3)
+    st.line_chart(forecast_revenue)
 
-        col1.metric("Occupancy", f"{avg_occ:.1f}%")
-        col2.metric("ADR", f"{adr:.0f}€")
-        col3.metric("RevPAR", f"{revpar:.0f}€")
+    st.metric("Revenue totale stimato anno", f"{total_revenue_365:,.0f}€")
 
-        st.subheader("Trend prenotazioni")
+# -------------------------
+# AI REVENUE COPILOT
+# -------------------------
 
-        st.line_chart(data["rooms_sold"])
+elif menu == "AI Copilot":
 
-    # -----------------------
-    # FORECAST
-    # -----------------------
+    st.title("AI Revenue Copilot")
 
-    if menu == "Forecast":
+    if "copilot_history" not in st.session_state:
+        st.session_state.copilot_history = []
 
-        st.title("Demand Forecast 365 giorni")
+    question = st.chat_input("Chiedi all'AI Revenue Copilot")
 
-        st.line_chart(forecast)
+    if question:
 
-        st.metric("Domanda prevista media", f"{predicted_demand:.0f} camere")
+        st.session_state.copilot_history.append(("user", question))
 
-    # -----------------------
-    # PRICING
-    # -----------------------
+        weekend_demand = data["rooms_sold"].tail(7).mean()
 
-    if menu == "Pricing":
-
-        st.title("AI Pricing Engine")
-
-        col1, col2 = st.columns(2)
-
-        col1.metric("ADR attuale", f"{adr:.0f}€")
-        col2.metric("Prezzo suggerito AI", f"{suggested_price:.0f}€")
-
-        competitor_price = adr * 1.1
-
-        st.subheader("Analisi Competitor")
-
-        st.metric("Prezzo medio competitor", f"{competitor_price:.0f}€")
-
-        if suggested_price < competitor_price:
-            st.warning("Prezzo sotto la media competitor")
+        if predicted_demand > weekend_demand:
+            strategy = "aumentare i prezzi nei giorni di alta domanda"
         else:
-            st.success("Prezzo competitivo rispetto al mercato")
+            strategy = "mantenere prezzi competitivi"
 
-        st.subheader("Simulatore prezzo")
-
-        new_price = st.slider("Simula nuovo prezzo camera", 50, 400, int(suggested_price))
-
-        simulated_revpar = new_price * occupancy_forecast
-
-        simulated_revenue = new_price * rooms * occupancy_forecast
-
-        col3, col4 = st.columns(2)
-
-        col3.metric("RevPAR simulato", f"{simulated_revpar:.0f}€")
-        col4.metric("Revenue stimato", f"{simulated_revenue:.0f}€")
-
-    # -----------------------
-    # REVENUE FORECAST
-    # -----------------------
-
-    if menu == "Revenue Forecast":
-
-        st.title("Revenue Forecast 365 giorni")
-
-        st.line_chart(forecast_revenue)
-
-        st.metric("Revenue totale stimato anno", f"{total_revenue_365:,.0f}€")
-
-    # -----------------------
-    # AI REVENUE COPILOT
-    # -----------------------
-
-    if menu == "AI Copilot":
-
-        st.title("AI Revenue Copilot")
-
-        if "copilot_history" not in st.session_state:
-            st.session_state.copilot_history = []
-
-        question = st.chat_input("Chiedi all'AI Revenue Copilot")
-
-        if question:
-
-            st.session_state.copilot_history.append(("user", question))
-
-            weekend_demand = data["rooms_sold"].tail(7).mean()
-
-            if predicted_demand > weekend_demand:
-                strategy = "aumentare i prezzi nei giorni di alta domanda"
-            else:
-                strategy = "mantenere prezzi competitivi"
-
-            answer = f"""
+        answer = f"""
 Analisi AI completata.
 
 Domanda prevista media: {predicted_demand:.0f} camere
@@ -232,15 +249,9 @@ Strategia consigliata:
 {strategy}
 """
 
-            st.session_state.copilot_history.append(("ai", answer))
+        st.session_state.copilot_history.append(("ai", answer))
 
-        for role, text in st.session_state.copilot_history:
+    for role, text in st.session_state.copilot_history:
 
-            with st.chat_message("user" if role == "user" else "assistant"):
-                st.write(text)
-
-else:
-
-    st.title("Carica i dati hotel")
-
-    st.info("Carica un file CSV per iniziare l'analisi revenue.")
+        with st.chat_message("user" if role == "user" else "assistant"):
+            st.write(text)
