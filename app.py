@@ -50,21 +50,25 @@ if uploaded_file:
 
     st.line_chart(forecast)
 
-    predicted_demand = forecast.mean()
+predicted_demand = forecast.mean()
 
-    if predicted_demand > 90:
-        suggested_price = adr * 1.25
-        alert = "Alta domanda prevista: aumentare prezzi"
-    elif predicted_demand > 75:
-        suggested_price = adr * 1.15
-        alert = "Domanda stabile"
-    else:
-        suggested_price = adr * 0.9
-        alert = "Domanda debole: ridurre prezzi"
+# calcolo prezzo AI
 
-    occupancy_forecast = predicted_demand / data["rooms_available"].iloc[0]
+if predicted_demand > 90:
+    suggested_price = adr * 1.2
+elif predicted_demand > 75:
+    suggested_price = adr * 1.1
+else:
+    suggested_price = adr * 0.9
+
+# calcolo occupazione prevista
+
+occupancy_forecast = predicted_demand / data["rooms_available"].iloc[0]
+
+# calcolo RevPAR
 
 revpar_forecast = suggested_price * occupancy_forecast
+
 
 # Competitor pricing simulation
 competitor_price = adr * 1.1
