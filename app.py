@@ -87,10 +87,7 @@ menu = st.sidebar.selectbox(
         "Occupancy Heatmap",
         "Booking Pace",
         "Daily Pricing",
-<<<<<<< HEAD
-=======
         "Demand Calendar",
->>>>>>> 4ff1095 (AI Revenue Engine v1)
         "AI Copilot"
     ]
 )
@@ -150,7 +147,6 @@ data = pd.read_sql(
 )
 
 if len(data) == 0:
-
     st.title("Nessun dato disponibile")
     st.info("Carica un CSV per iniziare")
     st.stop()
@@ -163,9 +159,9 @@ data["date"] = pd.to_datetime(data["date"])
 
 data["occupancy"] = data["rooms_sold"] / data["rooms_available"]
 
-avg_occ = data["occupancy"].mean()*100
+avg_occ = data["occupancy"].mean() * 100
 adr = data["ADR"].mean()
-revpar = adr*(avg_occ/100)
+revpar = adr * (avg_occ / 100)
 
 rooms = data["rooms_available"].iloc[0]
 
@@ -177,24 +173,7 @@ data = data.sort_values("date")
 data["pickup"] = data["rooms_sold"].diff().fillna(0)
 
 # -------------------------
-<<<<<<< HEAD
-# HEATMAP
-# -------------------------
-
-data["weekday"] = data["date"].dt.day_name()
-data["week"] = data["date"].dt.isocalendar().week
-
-heatmap_data = data.pivot_table(
-    values="occupancy",
-    index="week",
-    columns="weekday",
-    aggfunc="mean"
-)
-
-# -------------------------
-=======
->>>>>>> 4ff1095 (AI Revenue Engine v1)
-# FORECAST
+# FORECAST MODEL
 # -------------------------
 
 data["day"] = np.arange(len(data))
@@ -203,7 +182,7 @@ X = data[["day"]]
 y = data["rooms_sold"]
 
 model = LinearRegression()
-model.fit(X,y)
+model.fit(X, y)
 
 future_days = np.arange(len(data), len(data)+365).reshape(-1,1)
 
@@ -227,7 +206,7 @@ elif occupancy_forecast > 0.50:
 else:
     suggested_price = adr*0.90
 
-competitor_price = adr*1.1
+competitor_price = adr * 1.1
 
 # -------------------------
 # DAILY PRICING
@@ -236,17 +215,13 @@ competitor_price = adr*1.1
 daily_prices = []
 
 for demand in forecast.flatten():
-
     occ = demand / rooms
     factor = 1 + occ
     price = adr * factor
-
     daily_prices.append(price)
 
 daily_prices = np.array(daily_prices)
 
-<<<<<<< HEAD
-=======
 # -------------------------
 # DEMAND CALENDAR
 # -------------------------
@@ -266,7 +241,6 @@ calendar_pivot = calendar_df.pivot_table(
     aggfunc="mean"
 )
 
->>>>>>> 4ff1095 (AI Revenue Engine v1)
 # -------------------------
 # REVENUE FORECAST
 # -------------------------
@@ -307,11 +281,7 @@ elif menu == "Forecast":
 
     fig = px.line(forecast_df, x="day", y="forecast")
 
-<<<<<<< HEAD
-    st.plotly_chart(fig, use_container_width=True)
-=======
     st.plotly_chart(fig)
->>>>>>> 4ff1095 (AI Revenue Engine v1)
 
 # -------------------------
 # PRICING ENGINE
@@ -352,14 +322,6 @@ elif menu == "Occupancy Heatmap":
 
     st.title("Occupancy Heatmap")
 
-<<<<<<< HEAD
-    fig = px.imshow(
-        heatmap_data,
-        labels=dict(x="Day", y="Week", color="Occupancy"),
-        aspect="auto"
-    )
-
-=======
     heatmap_data = data.pivot_table(
         values="occupancy",
         index=data["date"].dt.isocalendar().week,
@@ -410,109 +372,16 @@ elif menu == "Demand Calendar":
 
     fig = px.imshow(calendar_pivot)
 
->>>>>>> 4ff1095 (AI Revenue Engine v1)
     st.plotly_chart(fig)
 
 # -------------------------
-# BOOKING PACE
-# -------------------------
-
-elif menu == "Booking Pace":
-
-    st.title("Booking Pace")
-
-    fig = px.bar(data, x="date", y="pickup")
-
-    st.plotly_chart(fig)
-
-# -------------------------
-# DAILY PRICING
-# -------------------------
-
-elif menu == "Daily Pricing":
-
-    st.title("AI Daily Pricing")
-
-    pricing_df = pd.DataFrame({
-        "day":future_days.flatten(),
-        "price":daily_prices
-    })
-
-    fig = px.line(pricing_df, x="day", y="price")
-
-    st.plotly_chart(fig)
-
-# -------------------------
-# AI COPILOT 2.0
+# AI COPILOT
 # -------------------------
 
 elif menu == "AI Copilot":
 
-    st.title("AI Revenue Advisor")
+    st.title("AI Revenue Copilot")
 
-<<<<<<< HEAD
-    occ_forecast = predicted_demand / rooms
-    pickup_recent = data["pickup"].tail(7).mean()
-
-    # indicatori
-
-    st.subheader("Indicatori chiave")
-
-    col1,col2,col3 = st.columns(3)
-
-    col1.metric("Domanda prevista", f"{predicted_demand:.0f} camere")
-    col2.metric("Occupazione prevista", f"{occ_forecast*100:.1f}%")
-    col3.metric("Pickup medio (7 giorni)", f"{pickup_recent:.1f}")
-
-    st.metric("Prezzo suggerito", f"{suggested_price:.0f}€")
-    st.metric("Prezzo competitor", f"{competitor_price:.0f}€")
-
-    # analisi AI
-
-    analysis = []
-
-    if occ_forecast > 0.85:
-        analysis.append("domanda molto alta")
-
-    elif occ_forecast > 0.65:
-        analysis.append("domanda stabile")
-
-    else:
-        analysis.append("domanda debole")
-
-    if pickup_recent > 2:
-        analysis.append("pickup in crescita")
-
-    elif pickup_recent < 0:
-        analysis.append("pickup in calo")
-
-    if suggested_price < competitor_price:
-        analysis.append("prezzo sotto mercato")
-
-    elif suggested_price > competitor_price:
-        analysis.append("prezzo sopra mercato")
-
-    # strategia
-
-    if occ_forecast > 0.85 and pickup_recent > 1:
-        strategy = "Aumentare prezzi del 10-15% nei prossimi giorni"
-
-    elif occ_forecast > 0.65:
-        strategy = "Mantenere pricing attuale e monitorare pickup"
-
-    else:
-        strategy = "Attivare promozioni e campagne marketing"
-
-    # report
-
-    st.subheader("Analisi AI")
-
-    for a in analysis:
-        st.write("•",a)
-
-    st.subheader("Strategia consigliata")
-
-=======
     occ = predicted_demand/rooms
 
     if occ > 0.85:
