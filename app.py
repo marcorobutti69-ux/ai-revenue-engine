@@ -367,27 +367,75 @@ elif menu == "AI Copilot":
 
     st.title("AI Revenue Copilot")
 
+    if "chat" not in st.session_state:
+        st.session_state.chat=[]
+
     question = st.chat_input("Fai una domanda")
 
     if question:
 
-        occ = predicted_demand/rooms
+        st.session_state.chat.append(("user",question))
+
+        occ = predicted_demand / rooms
+
+        pickup_trend = data["pickup"].tail(7).mean()
+
+        analysis = []
 
         if occ > 0.85:
-            strategy = "Alta domanda prevista: aumentare prezzi"
+            analysis.append("domanda molto alta")
+
         elif occ > 0.65:
-            strategy = "Domanda stabile"
+            analysis.append("domanda stabile")
+
         else:
-            strategy = "Domanda bassa: attivare promozioni"
+            analysis.append("domanda debole")
 
-        st.chat_message("assistant").write(
-f"""
-Domanda prevista: {predicted_demand:.0f}
+        if pickup_trend > 2:
+            analysis.append("pickup in crescita")
 
-Prezzo suggerito: {suggested_price:.0f}€
+        elif pickup_trend < 0:
+            analysis.append("pickup in calo")
 
-Revenue previsto: {total_revenue:,.0f}€
+        if suggested_price < competitor_price:
+            analysis.append("prezzo sotto mercato")
 
-Strategia: {strategy}
+        elif suggested_price > competitor_price:
+            analysis.append("prezzo sopra mercato")
+
+        # strategia
+
+        if occ > 0.85 and pickup_trend > 1:
+            strategy = "aumentare prezzi del 10-15%"
+
+        elif occ > 0.65:
+            strategy = "mantenere prezzi attuali"
+
+        else:
+            strategy = "attivare promozioni o campagne marketing"
+
+        answer = f"""
+Domanda prevista: {predicted_demand:.0f} camere
+
+Occupazione prevista: {occ*100:.1f}%
+
+Prezzo suggerito: {suggested_price:.0f} €
+
+Prezzo competitor: {competitor_price:.0f} €
+
+Revenue previsto: {total_revenue:,.0f} €
+
+Analisi AI:
+- {analysis[0]}
+{''.join([f"- {a}\n" for a in analysis[1:]])}
+
+Strategia consigliata:
+{strategy}
 """
-)
+
+        st.session_state.chat.append(("ai",answer))
+
+    for role,text in st.session_state.chat:
+
+        with st.chat_message("user" if role=="user" else "assistant"):
+            st.write(text)
