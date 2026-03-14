@@ -6,6 +6,7 @@ from sklearn.linear_model import LinearRegression
 st.set_page_config(page_title="AI Revenue Engine", layout="wide")
 
 # LOGIN
+
 if "login" not in st.session_state:
     st.session_state.login = False
 
@@ -40,7 +41,7 @@ if uploaded_file:
 
     data = pd.read_csv(uploaded_file)
 
-    # KPI base
+    # KPI BASE
 
     data["occupancy"] = data["rooms_sold"] / data["rooms_available"]
 
@@ -56,13 +57,13 @@ if uploaded_file:
     col2.metric("ADR", f"{adr:.0f}€")
     col3.metric("RevPAR", f"{revpar:.0f}€")
 
-    # Trend prenotazioni
+    # TREND PRENOTAZIONI
 
     st.subheader("Trend prenotazioni")
 
     st.line_chart(data["rooms_sold"])
 
-    # AI Forecast
+    # FORECAST AI 365 GIORNI
 
     data["day"] = np.arange(len(data))
 
@@ -72,17 +73,17 @@ if uploaded_file:
     model = LinearRegression()
     model.fit(X, y)
 
-    future_days = np.arange(len(data), len(data) + 30).reshape(-1, 1)
+    future_days = np.arange(len(data), len(data) + 365).reshape(-1, 1)
 
     forecast = model.predict(future_days)
 
-    st.subheader("Forecast domanda 30 giorni")
+    st.subheader("Forecast domanda 365 giorni")
 
     st.line_chart(forecast)
 
     predicted_demand = forecast.mean()
 
-    # Pricing AI
+    # PRICING AI
 
     if predicted_demand > 90:
         suggested_price = adr * 1.2
@@ -103,7 +104,7 @@ if uploaded_file:
     col5.metric("Prezzo suggerito", f"{suggested_price:.0f}€")
     col6.metric("RevPAR previsto", f"{revpar_forecast:.0f}€")
 
-    # Competitor pricing
+    # ANALISI COMPETITOR
 
     competitor_price = adr * 1.1
 
@@ -116,7 +117,7 @@ if uploaded_file:
     else:
         st.success("Prezzo competitivo rispetto al mercato")
 
-    # Simulatore prezzo
+    # SIMULATORE PREZZO
 
     st.subheader("Simulatore prezzo")
 
@@ -132,5 +133,6 @@ if uploaded_file:
 
     col7.metric("RevPAR simulato", f"{simulated_revpar:.0f}€")
     col8.metric("Revenue stimato", f"{simulated_revenue:.0f}€")
+
 
 
